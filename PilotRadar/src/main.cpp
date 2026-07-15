@@ -2,7 +2,6 @@
 #include <math.h>
 #include <WiFi.h>
 
-// Colors
 #define CL_BLACK   0x0000
 #define CL_GREEN   0x07E0
 #define CL_RED     0xF800
@@ -27,7 +26,6 @@ bool wifiMovement = false;
 int movementPower = 0;
 float smoothedChange = 0.0f;
 
-// Log System
 String logs[4] = {"", "", "", ""};
 void addLog(String msg) {
     for (int i = 0; i < 3; i++) {
@@ -41,7 +39,6 @@ M5Canvas canvas(&M5.Display);
 constexpr int WIDTH  = 240;
 constexpr int HEIGHT = 135;
 
-// New Geometry: Left Side Radar
 constexpr int CX = 68;
 constexpr int CY = 68;
 constexpr int RADAR_RADIUS = 55;
@@ -49,11 +46,8 @@ constexpr int RADAR_RADIUS = 55;
 float sweepAngle = 0.0f;
 float imuYaw = 0;
 unsigned long lastImuTime = 0;
-
-// Device Motion State
 bool deviceMoving = false;
 
-// ===== MENU =====
 bool menuOpen = false;
 int menuIndex = 0;
 
@@ -67,12 +61,10 @@ String lockedSSID = "";
 unsigned long btnBTime = 0;
 bool waitingBtnB = false;
 
-// Draw functions
 void drawRadarBackground()
 {
     canvas.fillScreen(CL_BLACK);
     
-    // Draw Radar Circles
     canvas.drawCircle(CX, CY, 18, CL_GREEN);
     canvas.drawCircle(CX, CY, 36, CL_GREEN);
     canvas.drawCircle(CX, CY, RADAR_RADIUS, CL_GREEN);
@@ -80,7 +72,6 @@ void drawRadarBackground()
     canvas.drawLine(CX, CY - RADAR_RADIUS, CX, CY + RADAR_RADIUS, CL_GREEN);
     canvas.fillCircle(CX, CY, 3, CL_GREEN);
 
-    // Dynamic North (N) Pointer
     float r = (-90.0f - imuYaw) * DEG_TO_RAD;
     int nx = CX + cos(r) * (RADAR_RADIUS - 7);
     int ny = CY + sin(r) * (RADAR_RADIUS - 7);
@@ -89,7 +80,6 @@ void drawRadarBackground()
     canvas.setCursor(nx - 3, ny - 4);
     canvas.print("N");
 
-    // Right Side Info Panel
     canvas.setTextColor(CL_WHITE);
     canvas.setTextSize(1);
     canvas.setCursor(132, 5);
@@ -114,10 +104,8 @@ void drawRadarBackground()
         canvas.print("CLEAR");
     }
 
-    // Log terminal box (thin orange frame)
     canvas.drawRect(130, 53, 106, 78, CL_ORANGE);
     
-    // Draw logs
     canvas.setTextColor(CL_CYAN);
     for (int i = 0; i < 4; i++) {
         if (logs[i] != "") {
@@ -126,7 +114,6 @@ void drawRadarBackground()
         }
     }
 
-    // Device stability indicator
     canvas.setCursor(10, 125);
     if (deviceMoving) {
         canvas.setTextColor(CL_RED);
@@ -175,7 +162,6 @@ void drawMenu()
     canvas.setTextSize(1);
     int y = 35 - menuScroll;
 
-    // AUTO
     if (menuIndex == 0)
         canvas.setTextColor(CL_YELLOW);
     else
@@ -213,11 +199,9 @@ void drawMenu()
 void drawCalibrationScreen() {
     canvas.fillScreen(CL_BLACK);
     
-    // Compass Circle in center
     canvas.drawCircle(WIDTH / 2, 50, 36, CL_GREEN);
     canvas.drawCircle(WIDTH / 2, 50, 2, CL_GREEN);
 
-    // Dynamic North Pointer (Red 'N')
     float r = (-90.0f - imuYaw) * DEG_TO_RAD;
     int nx = (WIDTH / 2) + cos(r) * 26;
     int ny = 50 + sin(r) * 26;
@@ -226,10 +210,8 @@ void drawCalibrationScreen() {
     canvas.setCursor(nx - 5, ny - 7);
     canvas.print("N");
 
-    // Static red pointer at the bottom (facing 90 degrees / top of compass)
     canvas.fillTriangle(WIDTH / 2, 80, (WIDTH / 2) - 6, 88, (WIDTH / 2) + 6, 88, CL_RED);
 
-    // Flashing calibration prompt
     canvas.setTextSize(1);
     canvas.setTextColor(CL_YELLOW);
     if ((millis() / 400) % 2 == 0) {
@@ -237,7 +219,6 @@ void drawCalibrationScreen() {
         canvas.print("TURN DEV TO NORTH & PRESS B");
     }
     
-    // Show current angle
     canvas.setTextColor(CL_CYAN);
     canvas.setCursor(12, 118);
     int currentHeading = ((int)(-imuYaw) % 360 + 360) % 360;
@@ -266,14 +247,12 @@ void loop()
 {
     M5.update();
 
-    // Check for Calibration Trigger (Long Press B)
     if (currentState == STATE_RADAR && M5.BtnB.pressedFor(1000)) {
         currentState = STATE_CALIBRATION;
         M5.Speaker.tone(1200, 100);
-        delay(300); // Debounce
+        delay(300);
     }
 
-    // Read IMU and update heading
     if (M5.Imu.update())
     {
         auto imu = M5.Imu.getImuData();
@@ -286,13 +265,11 @@ void loop()
         }
         lastImuTime = now;
 
-        // Device Stability Check
         float gyroMag = sqrt(imu.gyro.x*imu.gyro.x + imu.gyro.y*imu.gyro.y + imu.gyro.z*imu.gyro.z);
         deviceMoving = (gyroMag > 10.0f);
     }
 
     if (currentState == STATE_CALIBRATION) {
-        // Calibration UI
         drawCalibrationScreen();
         canvas.pushSprite(0, 0);
 
@@ -302,16 +279,13 @@ void loop()
             currentState = STATE_RADAR;
             
             M5.Speaker.tone(2000, 200);
-            WiFi.scanNetworks(true); // Start first Wi-Fi scan
+            WiFi.scanNetworks(true);
             addLog("Calibrated OK");
         }
         delay(16);
         return;
     }
 
-    // --- STATE_RADAR ---
-    
-    // Button A Handling
     if (M5.BtnA.wasPressed())
     {
         if (menuOpen)
@@ -337,7 +311,6 @@ void loop()
         }
     }
 
-    // Button B Handling
     if (M5.BtnB.wasPressed())
     {
         unsigned long now = millis();
@@ -376,7 +349,6 @@ void loop()
         waitingBtnB = false;
     }
 
-    // Wi-Fi Scan Complete check
     int networks = WiFi.scanComplete();
     if (networks >= 0)
     {
@@ -396,7 +368,6 @@ void loop()
             wifiRSSI[i] = WiFi.RSSI(i);
         }
 
-        // Sort by RSSI
         for (int i = 0; i < count - 1; i++)
         {
             for (int j = i + 1; j < count; j++)
@@ -449,16 +420,13 @@ void loop()
                 M5.Speaker.tone(1500, 300);
             }
             
-            // Distance String mapping
             String distStr = "Far";
             if (bestRSSI >= -40) distStr = "V.Close";
             else if (bestRSSI >= -55) distStr = "Close";
             else if (bestRSSI >= -70) distStr = "Medium";
             
-            // Heading angle (0 - 359)
             int heading = ((int)(-imuYaw) % 360 + 360) % 360;
             
-            // Add Movement Log
             addLog("M:" + String(heading) + "d | " + distStr);
         }
 
@@ -468,7 +436,6 @@ void loop()
         WiFi.scanNetworks(true);
     }
 
-    // Render screen
     if (menuOpen)
     {
         drawMenu();
