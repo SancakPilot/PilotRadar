@@ -6,20 +6,12 @@ bool lastMovementState = false;
 
 int menuScroll = 0;
 
-String showSSID = "";
-int showRSSI = 0;
-float deviceAngle = 0;
 String targetSSID = "";
 int bestRSSI = -100;
-unsigned long lastWifiScan = 0;
 int lastRSSI = -100;
 bool wifiMovement = false;
 int movementPower = 0;
-unsigned long lastGyroTime = 0;
-
-float imuAngle = 0;
-
-float gx, gy, gz;
+float smoothedChange = 0.0f;
 
 M5Canvas canvas(&M5.Display);
 
@@ -355,59 +347,39 @@ else
     }
 }
 
-    int change = abs(bestRSSI - lastRSSI);
+    float instantChange = abs(bestRSSI - lastRSSI);
+    // EMA filtresi ile sinyal dalgalanmalarını yumuşatıyoruz
+    smoothedChange = (smoothedChange * 0.6f) + (instantChange * 0.4f);
 
-    movementPower = constrain(change * 15, 0, 100);
+    movementPower = constrain((int)(smoothedChange * 15), 0, 100);
 
-    wifiMovement = (change > 3);
+    wifiMovement = (smoothedChange > 2.5f);
 
     if(wifiMovement && !lastMovementState)
-{
-M5.Speaker.tone(1500, 300); // 1000Hz, 1 saniye bip
-}
+    {
+        M5.Speaker.tone(1500, 300); // 1500Hz, 300ms bip
+    }
 
-lastMovementState = wifiMovement;
+    lastMovementState = wifiMovement;
 
     lastRSSI = bestRSSI;
 
- WiFi.scanNetworks(true);    // Yeni taramayı başlat
+    WiFi.scanNetworks(true);    // Yeni taramayı başlat
 }
     if(M5.Imu.update())
-{
-    auto imu = M5.Imu.getImuData();
-
-    unsigned long now = millis();
-
-    if(lastGyroTime != 0)
     {
-        float dt = (now - lastGyroTime) / 1000.0f;
+        auto imu = M5.Imu.getImuData();
+        unsigned long now = millis();
 
-        deviceAngle += imu.gyro.z * dt;
+        if(lastImuTime != 0)
+        {
+            float dt = (now - lastImuTime) / 1000.0f;
+            // Jiroskop Z eksenini entegre ederek dönüş açısını buluyoruz
+            imuYaw += imu.gyro.z * dt;
+        }
+
+        lastImuTime = now;
     }
-
-    lastGyroTime = now;
-} 
-{
-    auto imuData = M5.Imu.getImuData();
-
-    unsigned long now = millis();
-
-    if(lastImuTime != 0)
-    {
-        float dt = (now - lastImuTime) / 1000.0f;
-
-        imuYaw += imuData.gyro.z * dt;
-    }
-
-    lastImuTime = now;
-}
-    M5.Imu.getGyro(&gx, &gy, &gz);
-
-    float gx, gy, gz;
-
-M5.Imu.getGyro(&gx, &gy, &gz);
-
-imuAngle += gz * 0.02;
 
 if(menuOpen)
 {
@@ -415,11 +387,12 @@ if(menuOpen)
 }
 else
 {
-drawRadarBackground();
+    drawRadarBackground();
 
-drawSweep(sweepAngle);
+    // Jiroskop açısıyla dengeleyerek çizdiriyoruz
+    drawSweep(sweepAngle - imuYaw);
 
-drawProximity();
+    drawProximity();
 }
 
 canvas.pushSprite(0,0);
